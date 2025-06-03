@@ -1,9 +1,10 @@
-torch==2.0.0+cpu
-torchvision==0.15.0+cpu
-torchaudio==2.0.0+cpu
+torch
+torchvision
+torchaudio
 diffusers>=0.21.0
 transformers>=4.30.0
 accelerate>=0.20.0
 gradio>=4.0.0
 Pillow>=9.0.0
 sentencepiece>=0.1.99 
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
