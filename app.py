@@ -3,7 +3,23 @@ import gradio as gr
 from diffusers import DDIMScheduler, DDIMInverseScheduler, StableDiffusionDiffEditPipeline
 from diffusers.utils import load_image, make_image_grid
 from PIL import Image
-from transformers import AutoTokenizer, T5ForConditionalGeneration
+from transformers import (
+    AutoTokenizer, 
+    T5ForConditionalGeneration,
+    BlipForConditionalGeneration,
+    BlipProcessor
+)
+
+# Initialize BLIP model for captioning
+def init_blip_model():
+    processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+    model = BlipForConditionalGeneration.from_pretrained(
+        "Salesforce/blip-image-captioning-base",
+        torch_dtype=torch.float32,
+        low_cpu_mem_usage=True
+    )
+    model.to("cpu")
+    return processor, model
 
 # Initialize T5 model for prompt generation
 def init_t5_model():
@@ -27,6 +43,14 @@ def init_pipeline():
     pipeline.inverse_scheduler = DDIMInverseScheduler.from_config(pipeline.scheduler.config)
     pipeline.to("cpu")
     return pipeline
+
+@torch.no_grad()
+def generate_caption(image, caption_generator, caption_processor):
+    text = "a photograph of"
+    inputs = caption_processor(image, text, return_tensors="pt").to("cpu", dtype=caption_generator.dtype)
+    outputs = caption_generator.generate(**inputs, max_new_tokens=128)
+    caption = caption_processor.batch_decode(outputs, skip_special_tokens=True)[0]
+    return caption
 
 @torch.no_grad()
 def generate_prompts(input_prompt, tokenizer, model):
@@ -134,6 +158,7 @@ def process_image_with_embeddings(image, source_concept, target_concept):
 # Initialize models
 pipeline = init_pipeline()
 t5_tokenizer, t5_model = init_t5_model()
+blip_processor, blip_model = init_blip_model()
 
 # Create Gradio interface
 with gr.Blocks(title="DiffEdit Image Editor") as demo:
@@ -173,6 +198,21 @@ with gr.Blocks(title="DiffEdit Image Editor") as demo:
                 fn=process_image_with_embeddings,
                 inputs=[input_image_emb, source_concept, target_concept],
                 outputs=output_image_emb
+            )
+        
+        with gr.TabItem("Image Captioning"):
+            with gr.Row():
+                with gr.Column():
+                    input_image_cap = gr.Image(type="pil", label="Input Image")
+                    caption_btn = gr.Button("Generate Caption")
+                
+                with gr.Column():
+                    caption_output = gr.Textbox(label="Generated Caption")
+            
+            caption_btn.click(
+                fn=lambda x: generate_caption(x, blip_model, blip_processor),
+                inputs=[input_image_cap],
+                outputs=[caption_output]
             )
 
 if __name__ == "__main__":
